@@ -44,6 +44,7 @@ dependencies {
     // MLKit Dependencies
     implementation 'com.google.firebase:firebase-ml-vision:22.0.0'
     implementation 'com.google.firebase:firebase-ml-vision-object-detection-model:18.0.0'
+    implementation 'com.google.firebase:firebase-ml-vision-image-label-model:18.0.0'
 
     implementation 'com.google.firebase:firebase-core:17.0.1'
 
