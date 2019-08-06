@@ -17,43 +17,77 @@
 package com.google.firebase.ml.md.kotlin.productsearch
 
 import android.content.Context
-import android.util.Log
 import com.android.volley.RequestQueue
 import com.android.volley.toolbox.JsonObjectRequest
 import com.android.volley.toolbox.Volley
-import com.google.android.gms.tasks.Tasks
 import com.google.firebase.ml.md.kotlin.objectdetection.DetectedObject
-import java.util.ArrayList
-import java.util.concurrent.Callable
+import com.google.firebase.ml.vision.FirebaseVision
+import com.google.firebase.ml.vision.common.FirebaseVisionImage
+import com.google.firebase.ml.vision.label.FirebaseVisionOnDeviceImageLabelerOptions
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.launch
+import java.util.*
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
+import kotlin.coroutines.CoroutineContext
 
 /** A fake search engine to help simulate the complete work flow.  */
 class SearchEngine(context: Context) {
 
     private val searchRequestQueue: RequestQueue = Volley.newRequestQueue(context)
     private val requestCreationExecutor: ExecutorService = Executors.newSingleThreadExecutor()
+    var job: Job = Job()
+    val coroutineContext: CoroutineContext
+        get() = Dispatchers.Main + job
 
     fun search(
-        detectedObject: DetectedObject,
-        listener: (detectedObject: DetectedObject, productList: List<Product>) -> Unit
+            detectedObject: DetectedObject,
+            listener: (detectedObject: DetectedObject, productList: List<Product>) -> Unit
     ) {
-        // Crops the object image out of the full image is expensive, so do it off the UI thread.
-        Tasks.call<JsonObjectRequest>(requestCreationExecutor, Callable { createRequest(detectedObject) })
-                .addOnSuccessListener { productRequest -> searchRequestQueue.add(productRequest.setTag(TAG)) }
-                .addOnFailureListener { e ->
-                    Log.e(TAG, "Failed to create product search request!", e)
-                    // Remove the below dummy code after your own product search backed hooked up.
-                    val productList = ArrayList<Product>()
-                    for (i in 0..7) {
-                        productList.add(
-                                Product(/* imageUrl= */"", "Product title $i", "Product subtitle $i"))
+        CoroutineScope(coroutineContext).launch {
+            val options = FirebaseVisionOnDeviceImageLabelerOptions.Builder()
+                    .setConfidenceThreshold(0.3f)
+                    .build()
+            val labeler = FirebaseVision.getInstance().getOnDeviceImageLabeler(options)
+            labeler.processImage(FirebaseVisionImage.fromBitmap(detectedObject.getBitmap()))
+                    .addOnSuccessListener { labels ->
+                        // Task completed successfully
+                        // ...
+                        val productList = ArrayList<Product>()
+                        labels.forEach {
+                            productList.add(Product("URL", it.text, it.confidence.toString()))
+                        }
+                        listener.invoke(detectedObject, productList)
                     }
-                    listener.invoke(detectedObject, productList)
-                }
+                    .addOnFailureListener { e ->
+                        // Task failed with an exception
+                        // ...
+                        val productList = ArrayList<Product>()
+                        listener.invoke(detectedObject, productList)
+                    }
+        }
+
+        // Crops the object image out of the full image is expensive, so do it off the UI thread.
+//        Tasks.call<JsonObjectRequest>(requestCreationExecutor, Callable { createRequest(detectedObject) })
+//                .addOnSuccessListener { productRequest -> searchRequestQueue.add(productRequest.setTag(TAG)) }
+//                .addOnFailureListener { e ->
+//                    Log.e(TAG, "Failed to create product search request!", e)
+//                    // Remove the below dummy code after your own product search backed hooked up.
+//                    val productList = ArrayList<Product>()
+//                    for (i in 0..7) {
+//                        productList.add(
+//                                Product(/* imageUrl= */"", "Product title $i", "Product subtitle $i"))
+//                    }
+//                    listener.invoke(detectedObject, productList)
+//                }
+
+
     }
 
     fun shutdown() {
+        job.cancel()
         searchRequestQueue.cancelAll(TAG)
         requestCreationExecutor.shutdown()
     }

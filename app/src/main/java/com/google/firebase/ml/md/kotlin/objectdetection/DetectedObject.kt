@@ -31,7 +31,7 @@ import java.io.IOException
 class DetectedObject(
     private val visionObject: FirebaseVisionObject,
     val objectIndex: Int,
-    private val image: FirebaseVisionImage
+    val image: FirebaseVisionImage
 ) {
 
     private var bitmap: Bitmap? = null
